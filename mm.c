@@ -38,7 +38,7 @@ team_t team = {
 /* single word (4) or double word (8) alignment */
 #define DOUBLE_SIZE 8
 #define SINGLE_SIZE 4
-#define CHUNKSIZE(1<<12)
+#define CHUNKSIZE (1<<12)
 
 #define MAX(x,y) ((x)>(y)? (x):(y))
 
@@ -111,8 +111,8 @@ int mm_init(void)
         return -1;
     PUT(heap_listp, 0);
     PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));
-    PUT(heap_iistp + (2 * SINGLE_SIZE), Pack(DOUBLE_SIZE(1));
-    PUT(heap_listp(3 * SINGLE_SIZE), PACK(0, 1));
+    PUT(heap_listp + (2 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));
+    PUT(heap_listp + (3 * SINGLE_SIZE), PACK(0, 1));
     heap_listp += (2 * SINGLE_SIZE);
     if (extend_heap(CHUNKSIZE / SINGLE_SIZE) == NULL)
         return -1;
