@@ -59,7 +59,6 @@ team_t team = {
 static void place(void* bp, size_t newsize);
 static void* find_fit(size_t asize);
 static void* extend_heap(size_t word) {
-
     char* bp;
     size_t temp = 0;
     if (word % 2 == 0) {
@@ -68,74 +67,23 @@ static void* extend_heap(size_t word) {
     else {
         temp = (word + 1) * SINGLE_SIZE;
     }
-    if ((long)(bp = mem_sbrk(temp)) == -1)return NULL;
+    if ((long)(bp = mem_sbrk(temp)) == -1) return NULL;
     PUT(HDRP(bp), PACK(temp, 0));
     PUT(FTRP(bp), PACK(temp, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
     return coalesce(bp);
 }
-static void* heap_listp;
-static char* result;
-static void* coalesce(void* bp) {
-    size_t pre_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
-    size_t size = GET_SIZE(HDRP(bp));
-    if (pre_alloc && next_alloc) {
-        return bp;
-        //이전과 다음이 모두 사용중인 경우이다.
-    }
-    else if (pre_alloc && !next_alloc) {
-        size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        PUT(HDRP(bp), PACK(size, 0));
-        PUT(FTRP(bp), PACK(size, 0));
-    }
-    else if (!pre_alloc && next_alloc) {
-        size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
-        bp = PREV_BLKP(bp);
-    }
-    //저 위에 속하지 않는 경우라면 당연히 양쪽을 모두 다 써도 괜찮은 경우니까 사이즈도 그만큼 뿔어나야함
-    else {
-        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
-        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0);
-        PUT(HDRP(NEXT_BLKP(bp)), PACK(size, 0));
-        bp = PREV_BLKP(bp);
-    }
-    return bp;
-}
-/*
- * mm_init - initialize the malloc package.
- */
-int mm_init(void)
-{
-    if ((heap_listp = mem_sbrk(4 * SINGLE_SIZE)) == (void*)-1)
-        return -1;
-    PUT(heap_listp, 0);
-    PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));
-    PUT(heap_listp + (2 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));
-    PUT(heap_listp + (3 * SINGLE_SIZE), PACK(0, 1));
-    heap_listp += (2 * SINGLE_SIZE);
-    if (extend_heap(CHUNKSIZE / SINGLE_SIZE) == NULL)
-        return -1;
-    result = (char*)heap_listp;
-    return 0;
-}
 
-/*
- * mm_malloc - Allocate a block by incrementing the brk pointer.
- *     Always allocate a block whose size is a multiple of the alignment.
- */
-void* mm_malloc(size_t size)
-{
+void* mm_malloc(size_t size) {
     size_t asize;
     size_t extendsize;
     char* bp;
-    if (size == 0)return NULL;
+    if (size == 0) return NULL;
     if (size <= DOUBLE_SIZE)
         asize = 2 * DOUBLE_SIZE;
     else
         asize = DOUBLE_SIZE * ((size + (DOUBLE_SIZE)+(DOUBLE_SIZE - 1)) / DOUBLE_SIZE);
-    if ((bp = find(asize)) != NULL) {
+    if ((bp = find_fit(asize)) != NULL) {
         place(bp, asize);
         return bp;
     }
@@ -146,22 +94,20 @@ void* mm_malloc(size_t size)
     return bp;
 }
 
-/*
- * mm_free - Freeing a block does nothing.
- */
-void mm_free(void* ptr)
-{
-    size_t size = GET_SIZE(HDRP(bp));
-    PUT(HDRP(bp), PACK(size, 0));
-    PUT(FTRP(bp), PACK(size, 0));
-    coalesce(bp);
+void mm_free(void* ptr) {
+    if (!ptr) return;
+    size_t size = GET_SIZE(HDRP(ptr));
+    PUT(HDRP(ptr), PACK(size, 0));
+    PUT(FTRP(ptr), PACK(size, 0));
+    coalesce(ptr);
 }
 
-/*
- * mm_realloc - Implemented simply in terms of mm_malloc and mm_free
- */
-void* mm_realloc(void* ptr, size_t size)
-{
+void* mm_realloc(void* ptr, size_t size) {
+    if (!ptr) return mm_malloc(size);
+    if (size == 0) {
+        mm_free(ptr);
+        return NULL;
+    }
     void* oldptr = ptr;
     void* newptr;
     size_t copySize;
@@ -176,7 +122,8 @@ void* mm_realloc(void* ptr, size_t size)
     mm_free(oldptr);
     return newptr;
 }
-void* find_fit(size_t asize) {
+
+static void* find_fit(size_t asize) {
     void* bp;
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
