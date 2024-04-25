@@ -56,7 +56,8 @@ team_t team = {
 
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
-
+static void place(void* bp, size_t newsize);
+static void* find_fit(size_t asize);
 static void* extend_heap(size_t word) {
 
     char* bp;
@@ -126,14 +127,23 @@ int mm_init(void)
  */
 void* mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void* p = mem_sbrk(newsize);
-    if (p == (void*)-1)
-        return NULL;
-    else {
-        *(size_t*)p = size;
-        return (void*)((char*)p + SIZE_T_SIZE);
+    size_t asize;
+    size_t extendsize;
+    char* bp;
+    if (size == 0)return NULL;
+    if (size <= DOUBLE_SIZE)
+        asize = 2 * DOUBLE_SIZE;
+    else
+        asize = DOUBLE_SIZE * ((size + (DOUBLE_SIZE)+(DOUBLE_SIZE - 1)) / DOUBLE_SIZE);
+    if ((bp = find(asize)) != NULL) {
+        place(bp, asize);
+        return bp;
     }
+    extendsize = MAX(asize, CHUNKSIZE);
+    if ((bp = extend_heap(extendsize / SINGLE_SIZE)) == NULL)
+        return NULL;
+    place(bp, asize);
+    return bp;
 }
 
 /*
@@ -166,4 +176,12 @@ void* mm_realloc(void* ptr, size_t size)
     mm_free(oldptr);
     return newptr;
 }
-
+void* find_fit(size_t asize) {
+    void* bp;
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            return bp;
+        }
+    }
+    return NULL;
+}
