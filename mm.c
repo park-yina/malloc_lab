@@ -75,6 +75,7 @@ static void* extend_heap(size_t word) {
     return coalesce(bp);
 }
 
+
 void* mm_malloc(size_t size) {
     size_t asize;
     size_t extendsize;
@@ -110,18 +111,18 @@ static void* coalesce(void* bp) {
         return bp;
     }
     else if (prev && !next) {
-        size += GET_SIZE(HDRP(NEXT_BLKP(bp));
+        size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
     }
     else if (!prev && next) {
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-        PUT(HDRP(bp), PACK(size, 0));
-        PUT(FTRP(PREV_BLKP(bp), PACK(size, 0)));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        PUT(FTRP(bp), PACK(size, 0)); 
         bp = PREV_BLKP(bp);
     }
+
     else {
-        //둘다 !일 경우
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
@@ -130,27 +131,34 @@ static void* coalesce(void* bp) {
     return bp;
 }
 
-void* mm_realloc(void* ptr, size_t size) {
-    if (!ptr) return mm_malloc(size);
-    if (size == 0) {
-        mm_free(ptr);
-        return NULL;
-    }
-    void* oldptr = ptr;
-    void* newptr;
-    size_t copySize;
+void* mm_realloc(void* ptr, size_t size)
+{
+    if (ptr == NULL) // 포인터가 NULL인 경우 할당만 수행
+        return mm_malloc(size);
 
-    newptr = mm_malloc(size);
+    if (size <= 0) 
+    {
+        mm_free(ptr);
+        return 0;
+    }
+
+    /* 새 블록에 할당 */
+    void* newptr = mm_malloc(size); // 새로 할당한 블록의 포인터
     if (newptr == NULL)
-        return NULL;
-    copySize = *(size_t*)((char*)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-        copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
+        return NULL; // 할당 실패
+
+    /* 데이터 복사 */
+    size_t copySize = GET_SIZE(HDRP(ptr)) - DOUBLE_SIZE;
+    if (size < copySize)                           
+        copySize = size;                         
+
+    memcpy(newptr, ptr, copySize); // 새 블록으로 데이터 복사
+
+    /* 기존 블록 반환 */
+    mm_free(ptr);
+
     return newptr;
 }
-
 static void* find_fit(size_t asize) {
     void* bp;
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
