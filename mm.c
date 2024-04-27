@@ -43,11 +43,11 @@ team_t team = {
 #define MAX(x,y) ((x)>(y)? (x):(y))
 
 #define PACK(size,alloc) ((size)|(alloc))
-#define GET(p) (*(unsigned int *)(p));
-#define PUG(p,val) (*(unsigned int *)(p)=(val));
+#define GET(p) (*(unsigned int *)(p))
+#define PUT(p,val) (*(unsigned int *)(p)=(val))
 #define GET_SIZE(p) (GET(p)& ~0X7)
 #define GET_ALLOC(p) (GET(p) & 0X1)
-#define HDRP(bp) ((char *)(bp)-SINGLE_SIZE);
+#define HDRP(bp) ((char *)(bp)-SINGLE_SIZE)
 #define FTRP(bp) ((char *)(bp)+GET_SIZE(HDRP(bp))-DOUBLE_SIZE)
 #define NEXT_BLKP(bp) ((char *)(bp)+GET_SIZE(((char *)(bp)-SINGLE_SIZE)))
 #define PREV_BLKP(bp) ((char *)(bp)+GET_SIZE(((char *)(bp)-DOUBLE_SIZE)))
@@ -56,6 +56,7 @@ team_t team = {
 
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
+static void* heap_listp;
 static void place(void* bp, size_t newsize);
 static void* find_fit(size_t asize);
 static void* extend_heap(size_t word) {
@@ -101,6 +102,33 @@ void mm_free(void* ptr) {
     PUT(FTRP(ptr), PACK(size, 0));
     coalesce(ptr);
 }
+static void* coalesce(void* bp) {
+    size_t prev = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+    size_t next = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+    size_t size = GET_SIZE(HDRP(bp));
+    if (prev && next) {
+        return bp;
+    }
+    else if (prev && !next) {
+        size += GET_SIZE(HDRP(NEXT_BLKP(bp));
+        PUT(HDRP(bp), PACK(size, 0));
+        PUT(FTRP(bp), PACK(size, 0));
+    }
+    else if (!prev && next) {
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)));
+        PUT(HDRP(bp), PACK(size, 0));
+        PUT(FTRP(PREV_BLKP(bp), PACK(size, 0)));
+        bp = PREV_BLKP(bp);
+    }
+    else {
+        //둘다 !일 경우
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
+        bp = PREV_BLKP(bp);
+    }
+    return bp;
+}
 
 void* mm_realloc(void* ptr, size_t size) {
     if (!ptr) return mm_malloc(size);
@@ -126,9 +154,24 @@ void* mm_realloc(void* ptr, size_t size) {
 static void* find_fit(size_t asize) {
     void* bp;
     for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {//공간이 크거나 같다는건 데이터가 들어갈 수 있다는 뜻임
             return bp;
+
         }
     }
     return NULL;
+}
+static void place(void* bp, size_t asize) {
+    size_t new_size = GET_SIZE(HDRP(bp));
+    if ((new_size - asize) >= (2 * DOUBLE_SIZE)) {
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+        bp = NEXT_BLKP(bp);
+        PUT(HDRP(bp), PACK(new_size - asize, 0));
+        PUT(FTRP(bp), PACK(new_size - asize, 0));
+    }
+    else {
+        PUT(HDRP(bp), PACK(asize, 1));
+        PUT(FTRP(bp), PACK(asize, 1));
+    }
 }
