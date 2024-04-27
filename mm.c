@@ -77,24 +77,31 @@ static void* extend_heap(size_t word) {
 
 
 void* mm_malloc(size_t size) {
-    size_t asize;
-    size_t extendsize;
+    size_t asize;      
+    size_t extendsize; 
     char* bp;
+
+    // 잘못된 요청 분기
     if (size == 0) return NULL;
+
+    /* 사이즈 조정 */
     if (size <= DOUBLE_SIZE)
         asize = 2 * DOUBLE_SIZE;
     else
         asize = DOUBLE_SIZE * ((size + (DOUBLE_SIZE)+(DOUBLE_SIZE - 1)) / DOUBLE_SIZE);
+
     if ((bp = find_fit(asize)) != NULL) {
-        place(bp, asize);
-        return bp;
+        place(bp, asize); // 할당
+        return bp;        // 새로 할당된 블록의 포인터 리턴
     }
+
     extendsize = MAX(asize, CHUNKSIZE);
     if ((bp = extend_heap(extendsize / SINGLE_SIZE)) == NULL)
         return NULL;
     place(bp, asize);
     return bp;
 }
+
 
 void mm_free(void* ptr) {
     if (!ptr) return;
