@@ -36,6 +36,7 @@ team_t team = {
 };
 
 /* single word (4) or double word (8) alignment */
+/* single word (4) or double word (8) alignment */
 #define DOUBLE_SIZE 8
 #define SINGLE_SIZE 4
 #define CHUNKSIZE (1<<12)
@@ -55,27 +56,32 @@ team_t team = {
 #define ALIGN(size) (((size) + (DOUBLE_SIZE-1)) & ~0x7)
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 static void* heap_listp;
-static void* coalesce(void* bp) {
-    size_t prev = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-    size_t next = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+static void* coalesce(void* bp)
+{
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
     size_t size = GET_SIZE(HDRP(bp));
-    if (prev && next) {
+
+    if (prev_alloc && next_alloc) {            /* Case 1 */
         return bp;
     }
-    else if (prev && !next) {
+
+    else if (prev_alloc && !next_alloc) {      /* Case 2 */
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
     }
-    else if (!prev && next) {
+
+    else if (!prev_alloc && next_alloc) {      /* Case 3 */
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
-        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
 
-    else {
-        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(FTRP(NEXT_BLKP(bp)));
+    else {                                     /* Case 4 */
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) +
+            GET_SIZE(FTRP(NEXT_BLKP(bp)));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
@@ -92,14 +98,14 @@ static void* extend_heap(size_t words) {
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
     return coalesce(bp);
 }
-int mm_init(void) {
-    if ((heap_listp = mem_sbrk(4 * SINGLE_SIZE)) == (void*)-1)
+extern int mm_init(void) {
+    if ((heap_listp = mem_sbrk(8 * SINGLE_SIZE)) == (void*)-1)
         return -1;
 
-    PUT(heap_listp, 0);
-    PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));
-    PUT(heap_listp + (2 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));
-    PUT(heap_listp + (3 * SINGLE_SIZE), PACK(0, 1));
+    PUT(heap_listp, PACK(0, 1));                                  // Prologue header
+    PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));    // Prologue footer
+    PUT(heap_listp + (2 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));    // Epilogue header
+    PUT(heap_listp + (3 * SINGLE_SIZE), PACK(0, 1));              // Epilogue footer
 
     heap_listp += (2 * SINGLE_SIZE);
 
@@ -113,7 +119,7 @@ static void place(void* bp, size_t newsize);
 static void* find_fit(size_t asize);
 
 
-void* mm_malloc(size_t size)
+extern void* mm_malloc(size_t size)
 {
     size_t asize;
     size_t extendsize;
@@ -141,16 +147,16 @@ void* mm_malloc(size_t size)
     return bp;
 }
 
-void mm_free(void* ptr) {
+extern void mm_free(void* ptr) {
+    if (ptr == NULL) // NULL 포인터를 free하려는 경우 무시합니다.
+        return;
     size_t size = GET_SIZE(HDRP(ptr));
     PUT(HDRP(ptr), PACK(size, 0));
     PUT(FTRP(ptr), PACK(size, 0));
     coalesce(ptr);
 }
 
-
-
-void* mm_realloc(void* ptr, size_t size)
+extern void* mm_realloc(void* ptr, size_t size)
 {
     if (ptr == NULL) // 포인터가 NULL인 경우 할당만 수행
         return mm_malloc(size);
@@ -158,7 +164,7 @@ void* mm_realloc(void* ptr, size_t size)
     if (size <= 0)
     {
         mm_free(ptr);
-        return 0;
+        return NULL;
     }
 
     void* newptr = mm_malloc(size); // 새로 할당한 블록의 포인터
@@ -193,8 +199,8 @@ static void place(void* bp, size_t asize) {
     if ((new_size - asize) >= (2 * DOUBLE_SIZE)) {
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
-        PUT(HDRP(bp), PACK(new_size - asize, 0));
-        PUT(FTRP(bp), PACK(new_size - asize, 0));
+        PUT(HDRP(NEXT_BLKP(bp)), PACK(new_size - asize, 0));
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(new_size - asize, 0));
     }
     else {
         PUT(HDRP(bp), PACK(new_size, 1));
