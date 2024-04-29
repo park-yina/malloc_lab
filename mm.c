@@ -57,6 +57,7 @@ team_t team = {
 
 static void* heap_listp;
 static void* free_listp; // 추가: free 리스트 포인터
+static void* last_bp;
 
 static void* coalesce(void* bp);
 static void* extend_heap(size_t words);
@@ -65,18 +66,17 @@ static void* find_fit(size_t asize);
 
 extern int mm_init(void)
 {
-    if ((heap_listp = mem_sbrk(6 * SINGLE_SIZE)) == (void*)-1)
+    if ((heap_listp = mem_sbrk(4 * SINGLE_SIZE)) == (void*)-1)
         return -1;
-    PUT(heap_listp, 0); /* Alignment padding */
-    PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE * 2, 1)); /* Prologue header */
-    PUT(heap_listp + (2 * SINGLE_SIZE), NULL); /* Prologue footer */
-    PUT(heap_listp + (3 * SINGLE_SIZE), NULL); /* PREV */
-    PUT(heap_listp + (4 * SINGLE_SIZE), PACK(DOUBLE_SIZE * 2, 1)); /* NEXT */
-    PUT(heap_listp + (5 * SINGLE_SIZE), PACK(0, 1)); /* Epilogue header */
+    PUT(heap_listp, 0);
+    PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1)); //prologue header
+    PUT(heap_listp + (2 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1)); //prologue footer
+    PUT(heap_listp + (3 * SINGLE_SIZE), PACK(0, 1)); //epilogue header
     heap_listp += (2 * SINGLE_SIZE);
-    free_listp = heap_listp; // free 리스트 포인터 초기화
+    last_bp = heap_listp;
 
-    if (extend_heap(4) == NULL)
+
+    if (extend_heap(CHUNKSIZE / SINGLE_SIZE) == NULL)
         return -1;
     return 0;
 }
@@ -148,12 +148,20 @@ extern void* mm_realloc(void* ptr, size_t size)
 static void* find_fit(size_t asize)
 {
     void* bp;
-    for (bp = free_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
+    for (bp = last_bp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            last_bp = bp;
             return bp;
         }
     }
-    return NULL;
+
+    for (bp = heap_listp; bp < last_bp; bp = NEXT_BLKP(bp)) {
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {
+            last_bp = bp;
+            return bp;
+        }
+    }
+    return NULL; 
 }
 
 static void place(void* bp, size_t asize)
@@ -197,6 +205,7 @@ static void* coalesce(void* bp)
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));
         bp = PREV_BLKP(bp);
     }
+    last_bp = bp;
     return bp;
 }
 
