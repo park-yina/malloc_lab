@@ -59,21 +59,17 @@ team_t team = {
 static void* heap_listp;
 static void place(void* bp, size_t newsize);
 static void* find_fit(size_t asize);
-static void* extend_heap(size_t word) {
+static void* extend_heap(size_t words) {
     char* bp;
-    size_t temp = 0;
-    if (word % 2 == 0) {
-        temp = word * SINGLE_SIZE;
-    }
-    else {
-        temp = (word + 1) * SINGLE_SIZE;
-    }
-    if ((long)(bp = mem_sbrk(temp)) == -1) return NULL;
-    PUT(HDRP(bp), PACK(temp, 0));
-    PUT(FTRP(bp), PACK(temp, 0));
+    size_t size = (words % 2 == 0) ? (words * SINGLE_SIZE) : ((words + 1) * SINGLE_SIZE);
+    if ((long)(bp = mem_sbrk(size)) == -1)
+        return NULL;
+    PUT(HDRP(bp), PACK(size, 0));
+    PUT(FTRP(bp), PACK(size, 0));
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
     return coalesce(bp);
 }
+
 
 
 void* mm_malloc(size_t size) {
@@ -186,7 +182,7 @@ static void place(void* bp, size_t asize) {
         PUT(FTRP(bp), PACK(new_size - asize, 0));
     }
     else {
-        PUT(HDRP(bp), PACK(asize, 1));
-        PUT(FTRP(bp), PACK(asize, 1));
+        PUT(HDRP(bp), PACK(new_size, 1));
+        PUT(FTRP(bp), PACK(new_size, 1));
     }
 }
