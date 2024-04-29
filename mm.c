@@ -99,10 +99,10 @@ static void* extend_heap(size_t words) {
     return coalesce(bp);
 }
 extern int mm_init(void) {
-    if ((heap_listp = mem_sbrk(8 * SINGLE_SIZE)) == (void*)-1)
+    if ((heap_listp = mem_sbrk(4 * SINGLE_SIZE)) == (void*)-1)
         return -1;
 
-    PUT(heap_listp, PACK(0, 1));                                  // Prologue header
+    PUT(heap_listp, 0);                                  // Prologue header
     PUT(heap_listp + (1 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));    // Prologue footer
     PUT(heap_listp + (2 * SINGLE_SIZE), PACK(DOUBLE_SIZE, 1));    // Epilogue header
     PUT(heap_listp + (3 * SINGLE_SIZE), PACK(0, 1));              // Epilogue footer
